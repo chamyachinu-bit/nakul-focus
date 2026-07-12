@@ -111,6 +111,8 @@ class _PgConnection:
         import psycopg2
         import psycopg2.extras
         from urllib.parse import urlparse, unquote
+        # Strip BOM/whitespace (PowerShell echo can inject a UTF-8 BOM)
+        url = url.lstrip('﻿').strip()
         # urlparse doesn't recognise the postgresql:// scheme — swap to https:// for parsing
         p = urlparse(url.replace("postgresql://", "https://", 1).replace("postgres://", "https://", 1))
         host     = p.hostname or ""
