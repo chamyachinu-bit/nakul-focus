@@ -1,0 +1,21 @@
+# Environment / secrets
+.env
+*.env
+
+# SQLite database (local only -- Supabase is used in production)
+*.db
+*.db-journal
+*_backup_*.db
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
