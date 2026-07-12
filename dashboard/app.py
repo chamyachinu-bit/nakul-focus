@@ -37,11 +37,18 @@ from config import BALI_FUND_TARGET, DASHBOARD_HOST, DASHBOARD_PORT
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "nakul-dev-secret-change-in-prod")
 
-# On Vercel (serverless) there is no run_dashboard() call, so initialise here.
-# The guard prevents a double-init when running locally via run_dashboard().
-if os.environ.get("VERCEL") or os.environ.get("DATABASE_URL"):
-    initialize_database()
-    seed_defaults()
+_db_ready = False
+
+@app.before_request
+def _ensure_db():
+    global _db_ready
+    if not _db_ready:
+        try:
+            initialize_database()
+            seed_defaults()
+            _db_ready = True
+        except Exception as e:
+            print(f"[DB INIT ERROR] {e}")
 
 #  PAGES 
 
