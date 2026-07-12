@@ -11,5 +11,10 @@
       "src": "/(.*)",
       "dest": "dashboard/app.py"
     }
-  ]
+  ],
+  "functions": {
+    "dashboard/app.py": {
+      "regions": ["bom1"]
+    }
+  }
 }
