@@ -2212,7 +2212,7 @@ function renderHistory(days) {
 
     return '<div class="card" style="margin-bottom:12px;">' +
       // Header row - always visible
-      '<div onclick="toggleHistDay('' + id + '')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;">' +
+      '<div onclick="toggleHistDay(\'' + id + '\')" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;">' +
         '<div>' +
           '<div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px;">' + d.label + '</div>' +
           '<div style="display:flex;gap:6px;flex-wrap:wrap;">' + chips.join('') + '</div>' +
