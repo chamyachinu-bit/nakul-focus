@@ -1,12 +1,15 @@
 {
   "version": 2,
-  "functions": {
-    "dashboard/app.py": {
-      "runtime": "@vercel/python",
-      "regions": ["bom1"]
+  "builds": [
+    {
+      "src": "dashboard/app.py",
+      "use": "@vercel/python"
     }
-  },
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/dashboard/app.py" }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "dashboard/app.py"
+    }
   ]
 }
