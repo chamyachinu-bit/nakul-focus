@@ -130,6 +130,7 @@ class _PgConnection:
             user=user,
             password=password,
             sslmode="require",
+            connect_timeout=15,
             cursor_factory=psycopg2.extras.RealDictCursor,
         )
 
