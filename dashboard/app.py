@@ -682,6 +682,7 @@ def history_api():
     conn = get_connection()
 
     # All distinct dates in range (union of all activity tables)
+    # Subquery alias required for PostgreSQL; WHERE filters the unioned result
     dates = conn.execute("""
         SELECT DISTINCT date FROM (
             SELECT date FROM habit_logs
@@ -690,12 +691,13 @@ def history_api():
             UNION SELECT date FROM weight_logs
             UNION SELECT date FROM mood_logs
             UNION SELECT date FROM timetable_logs
-        ) WHERE date BETWEEN ? AND ? ORDER BY date DESC
+        ) AS all_dates WHERE date BETWEEN ? AND ? ORDER BY date DESC
     """, (from_date, to_date)).fetchall()
 
     from datetime import datetime as _dt
     result = []
-    for (d,) in dates:
+    for row in dates:
+        d = row[0]  # row["date"] works too; integer index avoids key-name assumptions
         label = _dt.strptime(d, "%Y-%m-%d").strftime("%A, %d %B %Y")
 
         # Habits

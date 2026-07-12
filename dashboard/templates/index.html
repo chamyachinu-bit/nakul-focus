@@ -227,18 +227,25 @@
     .hamburger { display: none; background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); padding: 6px 9px; cursor: pointer; font-size: 16px; line-height: 1; }
     .hamburger:hover { color: var(--text); border-color: var(--border2); }
     .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 99; }
+    .mobile-hide { display: inline; }
     @media (max-width: 768px) {
       .hamburger { display: flex; align-items: center; }
-      .sidebar { transform: translateX(-100%); transition: transform 0.25s ease; position: fixed; z-index: 200; }
+      .sidebar { transform: translateX(-100%); transition: transform 0.25s ease; z-index: 200; }
       .sidebar.open { transform: translateX(0); box-shadow: 4px 0 24px rgba(0,0,0,0.6); }
       .sidebar-overlay.show { display: block; }
       .main { margin-left: 0; }
-      .content { padding: 16px; }
+      .content { padding: 14px; }
       .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr !important; }
-      .topbar { padding: 10px 16px; }
+      .topbar { padding: 10px 14px; gap: 6px; }
+      .topbar-right { gap: 5px; }
       .form-row { flex-direction: column; }
       .form-row .form-group { max-width: 100% !important; width: 100% !important; min-width: 0 !important; }
-      .form-row button { width: 100%; }
+      .form-row button { align-self: stretch; }
+      .mobile-hide { display: none; }
+      table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .section-title { font-size: 18px; }
+      .stat-val { font-size: 1.6rem; }
+      .big-num { font-size: 1.8rem; }
     }
   </style>
 </head>
@@ -293,8 +300,8 @@
     </div>
     <div class="topbar-right">
       <span id="last-refresh" style="font-size:10px;color:var(--muted)"></span>
-      <button class="btn-ghost" onclick="loadData()"><i class="ti ti-refresh"></i> Refresh</button>
-      <button class="btn-copy" onclick="copyForClaude()"><i class="ti ti-copy"></i> Copy for Claude</button>
+      <button class="btn-ghost" onclick="loadData()"><i class="ti ti-refresh"></i><span class="mobile-hide"> Refresh</span></button>
+      <button class="btn-copy" onclick="copyForClaude()"><i class="ti ti-copy"></i><span class="mobile-hide"> Copy for Claude</span></button>
     </div>
   </div>
 
