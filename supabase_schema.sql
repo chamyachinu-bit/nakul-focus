@@ -90,6 +90,16 @@ CREATE TABLE IF NOT EXISTS timetable_entries (
     created_at TEXT DEFAULT CURRENT_DATE
 );
 
+CREATE TABLE IF NOT EXISTS journal_entries (
+    id         BIGSERIAL PRIMARY KEY,
+    date       TEXT DEFAULT CURRENT_DATE,
+    created_at TEXT,
+    gratitude1 TEXT DEFAULT '',
+    gratitude2 TEXT DEFAULT '',
+    gratitude3 TEXT DEFAULT '',
+    entry      TEXT DEFAULT ''
+);
+
 CREATE TABLE IF NOT EXISTS timetable_logs (
     id       BIGSERIAL PRIMARY KEY,
     entry_id INTEGER NOT NULL,

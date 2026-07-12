@@ -300,6 +300,17 @@ def initialize_database():
             sort_order  INTEGER NOT NULL DEFAULT 0
         )
     """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS journal_entries (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            date       TEXT DEFAULT (date('now')),
+            created_at TEXT,
+            gratitude1 TEXT DEFAULT '',
+            gratitude2 TEXT DEFAULT '',
+            gratitude3 TEXT DEFAULT '',
+            entry      TEXT DEFAULT ''
+        )
+    """)
 
     conn.commit()
     conn.close()

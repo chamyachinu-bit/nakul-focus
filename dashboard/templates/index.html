@@ -994,6 +994,7 @@ function showSection(id) {
     const now = new Date();
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     document.getElementById('journal-date').textContent = `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
+    loadJournal();
   }
 }
 
@@ -1919,35 +1920,57 @@ function renderMoney() {
 }
 
 // ─── JOURNAL ──────────────────────────────────────────────────────────────────
-function saveJournal() {
+let journalEntries = [];
+
+async function loadJournal() {
+  try {
+    const res = await fetch('/api/journal');
+    journalEntries = await res.json();
+    renderJournal();
+  } catch(e) { showToast('Could not load journal'); }
+}
+
+async function saveJournal() {
   const g1 = document.getElementById('gratitude-1').value.trim();
   const g2 = document.getElementById('gratitude-2').value.trim();
   const g3 = document.getElementById('gratitude-3').value.trim();
   const entry = document.getElementById('journal-entry').value.trim();
   if (!entry && !g1) { showToast('Write something first'); return; }
-  const now = new Date();
-  ls.journalEntries.unshift({
-    date: now.toLocaleDateString('en-IN', {weekday:'long', year:'numeric', month:'long', day:'numeric'}),
-    gratitude: [g1, g2, g3].filter(Boolean),
-    text: entry
-  });
-  document.getElementById('gratitude-1').value = '';
-  document.getElementById('gratitude-2').value = '';
-  document.getElementById('gratitude-3').value = '';
-  document.getElementById('journal-entry').value = '';
-  save(); renderJournal();
-  showToast('Journal entry saved.');
+  try {
+    await fetch('/api/journal', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ gratitude1: g1, gratitude2: g2, gratitude3: g3, entry: entry })
+    });
+    document.getElementById('gratitude-1').value = '';
+    document.getElementById('gratitude-2').value = '';
+    document.getElementById('gratitude-3').value = '';
+    document.getElementById('journal-entry').value = '';
+    showToast('Journal entry saved.');
+    loadJournal();
+  } catch(e) { showToast('Error saving entry'); }
+}
+
+async function deleteJournalEntry(id) {
+  if (!confirm('Delete this entry?')) return;
+  await fetch('/api/journal/' + id, { method: 'DELETE' });
+  loadJournal();
 }
 
 function renderJournal() {
-  document.getElementById('journal-entries').innerHTML = ls.journalEntries.length
-    ? ls.journalEntries.map(e => `
-        <div class="journal-entry">
-          <div class="journal-date">${e.date}</div>
-          ${e.gratitude.length ? `<div style="font-size:10px;color:var(--gold);margin-bottom:5px;">${e.gratitude.join(' · ')}</div>` : ''}
-          <div class="journal-text">${e.text}</div>
-        </div>
-      `).join('')
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  document.getElementById('journal-entries').innerHTML = journalEntries.length
+    ? journalEntries.map(e => {
+        const d = new Date(e.created_at || e.date);
+        const label = isNaN(d) ? (e.date || '') : d.toLocaleDateString('en-IN', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+        const grats = [e.gratitude1, e.gratitude2, e.gratitude3].filter(Boolean);
+        return '<div class="journal-entry" style="position:relative;">' +
+          '<div class="journal-date">' + label + '</div>' +
+          (grats.length ? '<div style="font-size:10px;color:var(--gold);margin-bottom:5px;">' + grats.join(' · ') + '</div>' : '') +
+          (e.entry ? '<div class="journal-text">' + e.entry + '</div>' : '') +
+          '<button onclick="deleteJournalEntry(' + e.id + ')" style="position:absolute;top:0;right:0;background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:2px 4px;">&times;</button>' +
+        '</div>';
+      }).join('')
     : '<div class="empty">Start writing. Future Nakul will thank you.</div>';
 }
 
@@ -2409,7 +2432,6 @@ setDailyQuote();
 renderTasks();
 renderGoals();
 renderMoney();
-renderJournal();
 renderSeva();
 renderWater();
 renderSystems();

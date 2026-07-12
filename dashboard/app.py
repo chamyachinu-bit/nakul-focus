@@ -275,6 +275,45 @@ def timetable_update_api(entry_id):
     return jsonify({"success": True})
 
 
+@app.route("/api/journal", methods=["GET"])
+def journal_get_api():
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT * FROM journal_entries ORDER BY created_at DESC, id DESC LIMIT 50"
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/journal", methods=["POST"])
+def journal_save_api():
+    data = request.get_json()
+    conn = get_connection()
+    conn.execute(
+        "INSERT INTO journal_entries (date, created_at, gratitude1, gratitude2, gratitude3, entry) VALUES (?,?,?,?,?,?)",
+        (
+            datetime.now().strftime("%Y-%m-%d"),
+            datetime.now().strftime("%Y-%m-%d %H:%M"),
+            data.get("gratitude1", ""),
+            data.get("gratitude2", ""),
+            data.get("gratitude3", ""),
+            data.get("entry", ""),
+        )
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+
+@app.route("/api/journal/<int:entry_id>", methods=["DELETE"])
+def journal_delete_api(entry_id):
+    conn = get_connection()
+    conn.execute("DELETE FROM journal_entries WHERE id=?", (entry_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+
 @app.route("/api/timetable/import/<name>", methods=["POST"])
 def timetable_import_api(name):
     try:
