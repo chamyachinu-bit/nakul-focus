@@ -311,6 +311,70 @@ def initialize_database():
             entry      TEXT DEFAULT ''
         )
     """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS tasks (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            text       TEXT NOT NULL,
+            category   TEXT DEFAULT 'work',
+            deadline   TEXT DEFAULT '',
+            priority   TEXT DEFAULT 'mid',
+            done       INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (date('now')),
+            sort_order INTEGER DEFAULT 0
+        )
+    """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS goals (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            text       TEXT NOT NULL,
+            type       TEXT DEFAULT '6month',
+            target     TEXT DEFAULT '',
+            progress   INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (date('now'))
+        )
+    """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS transactions (
+            id     INTEGER PRIMARY KEY AUTOINCREMENT,
+            desc   TEXT NOT NULL,
+            amount REAL NOT NULL,
+            type   TEXT DEFAULT 'expense',
+            date   TEXT DEFAULT (date('now'))
+        )
+    """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS water_logs (
+            id   INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT NOT NULL UNIQUE,
+            cups INTEGER DEFAULT 0
+        )
+    """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS meal_logs (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            date      TEXT NOT NULL UNIQUE,
+            breakfast TEXT DEFAULT '',
+            lunch     TEXT DEFAULT '',
+            dinner    TEXT DEFAULT ''
+        )
+    """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS seva_logs (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            date        TEXT DEFAULT (date('now')),
+            description TEXT NOT NULL
+        )
+    """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS divine_logs (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            date       TEXT NOT NULL UNIQUE,
+            attachment TEXT DEFAULT '',
+            social     TEXT DEFAULT '',
+            peace      TEXT DEFAULT '',
+            reflection TEXT DEFAULT ''
+        )
+    """)
 
     conn.commit()
     conn.close()

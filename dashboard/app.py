@@ -216,10 +216,287 @@ def work_api():
     return jsonify({"success": True})
 
 
+@app.route("/api/habits", methods=["POST"])
+def add_habit_api():
+    data = request.get_json()
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "name required"}), 400
+    from habit_tracker import add_habit
+    new_id = add_habit(name, data.get("category", "general"))
+    return jsonify({"success": True, "id": new_id})
+
+
 @app.route("/api/habits/<int:habit_id>/remove", methods=["POST"])
 def remove_habit_api(habit_id):
     from habit_tracker import deactivate_habit
     deactivate_habit(habit_id)
+    return jsonify({"success": True})
+
+
+# ── TASKS API ─────────────────────────────────────────────────────────────────
+
+@app.route("/api/tasks")
+def tasks_get():
+    conn = get_connection()
+    rows = conn.execute(
+        "SELECT * FROM tasks ORDER BY done ASC, created_at DESC"
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/tasks", methods=["POST"])
+def tasks_add():
+    data = request.get_json()
+    text = (data.get("text") or "").strip()
+    if not text:
+        return jsonify({"error": "text required"}), 400
+    conn = get_connection()
+    cur = conn.execute(
+        "INSERT INTO tasks (text, category, deadline, priority) VALUES (?,?,?,?)",
+        (text, data.get("category", "work"), data.get("deadline", ""), data.get("priority", "mid"))
+    )
+    new_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True, "id": new_id})
+
+
+@app.route("/api/tasks/<int:task_id>", methods=["PATCH"])
+def tasks_update(task_id):
+    data = request.get_json()
+    fields, vals = [], []
+    for col in ("text", "category", "deadline", "priority"):
+        if col in data:
+            fields.append(f"{col}=?")
+            vals.append(data[col])
+    if "done" in data:
+        fields.append("done=?")
+        vals.append(1 if data["done"] else 0)
+    if fields:
+        vals.append(task_id)
+        conn = get_connection()
+        conn.execute(f"UPDATE tasks SET {', '.join(fields)} WHERE id=?", vals)
+        conn.commit()
+        conn.close()
+    return jsonify({"success": True})
+
+
+@app.route("/api/tasks/<int:task_id>", methods=["DELETE"])
+def tasks_delete(task_id):
+    conn = get_connection()
+    conn.execute("DELETE FROM tasks WHERE id=?", (task_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+
+# ── GOALS API ─────────────────────────────────────────────────────────────────
+
+@app.route("/api/goals")
+def goals_get():
+    conn = get_connection()
+    rows = conn.execute("SELECT * FROM goals ORDER BY created_at DESC").fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/goals", methods=["POST"])
+def goals_add():
+    data = request.get_json()
+    text = (data.get("text") or "").strip()
+    if not text:
+        return jsonify({"error": "text required"}), 400
+    conn = get_connection()
+    cur = conn.execute(
+        "INSERT INTO goals (text, type, target) VALUES (?,?,?)",
+        (text, data.get("type", "6month"), data.get("target", ""))
+    )
+    new_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True, "id": new_id})
+
+
+@app.route("/api/goals/<int:goal_id>", methods=["PATCH"])
+def goals_update(goal_id):
+    data = request.get_json()
+    fields, vals = [], []
+    for col in ("text", "type", "target"):
+        if col in data:
+            fields.append(f"{col}=?")
+            vals.append(data[col])
+    if "progress" in data:
+        fields.append("progress=?")
+        vals.append(int(data["progress"]))
+    if fields:
+        vals.append(goal_id)
+        conn = get_connection()
+        conn.execute(f"UPDATE goals SET {', '.join(fields)} WHERE id=?", vals)
+        conn.commit()
+        conn.close()
+    return jsonify({"success": True})
+
+
+@app.route("/api/goals/<int:goal_id>", methods=["DELETE"])
+def goals_delete(goal_id):
+    conn = get_connection()
+    conn.execute("DELETE FROM goals WHERE id=?", (goal_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+
+# ── TRANSACTIONS API ──────────────────────────────────────────────────────────
+
+@app.route("/api/transactions")
+def transactions_get():
+    conn = get_connection()
+    rows = conn.execute("SELECT * FROM transactions ORDER BY date DESC, id DESC").fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/transactions", methods=["POST"])
+def transactions_add():
+    data = request.get_json()
+    desc = (data.get("desc") or "").strip()
+    amount = data.get("amount")
+    if not desc or not amount:
+        return jsonify({"error": "desc and amount required"}), 400
+    conn = get_connection()
+    conn.execute(
+        "INSERT INTO transactions (desc, amount, type) VALUES (?,?,?)",
+        (desc, float(amount), data.get("type", "expense"))
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+
+@app.route("/api/transactions/<int:tx_id>", methods=["DELETE"])
+def transactions_delete(tx_id):
+    conn = get_connection()
+    conn.execute("DELETE FROM transactions WHERE id=?", (tx_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+
+# ── WATER API ─────────────────────────────────────────────────────────────────
+
+@app.route("/api/water/today")
+def water_today_get():
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT cups FROM water_logs WHERE date=?", (date.today().isoformat(),)
+    ).fetchone()
+    conn.close()
+    return jsonify({"cups": row["cups"] if row else 0})
+
+
+@app.route("/api/water/today", methods=["POST"])
+def water_today_set():
+    data = request.get_json()
+    cups = int(data.get("cups", 0))
+    today = date.today().isoformat()
+    conn = get_connection()
+    conn.execute(
+        "INSERT INTO water_logs (date, cups) VALUES (?,?) ON CONFLICT(date) DO UPDATE SET cups=excluded.cups",
+        (today, cups)
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True, "cups": cups})
+
+
+# ── MEALS API ─────────────────────────────────────────────────────────────────
+
+@app.route("/api/meals/today")
+def meals_today_get():
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT breakfast, lunch, dinner FROM meal_logs WHERE date=?", (date.today().isoformat(),)
+    ).fetchone()
+    conn.close()
+    return jsonify(dict(row) if row else {"breakfast": "", "lunch": "", "dinner": ""})
+
+
+@app.route("/api/meals/today", methods=["POST"])
+def meals_today_set():
+    data = request.get_json()
+    today = date.today().isoformat()
+    conn = get_connection()
+    conn.execute(
+        "INSERT INTO meal_logs (date, breakfast, lunch, dinner) VALUES (?,?,?,?) "
+        "ON CONFLICT(date) DO UPDATE SET breakfast=excluded.breakfast, lunch=excluded.lunch, dinner=excluded.dinner",
+        (today, data.get("breakfast", ""), data.get("lunch", ""), data.get("dinner", ""))
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+
+# ── SEVA API ──────────────────────────────────────────────────────────────────
+
+@app.route("/api/seva")
+def seva_get():
+    conn = get_connection()
+    rows = conn.execute("SELECT * FROM seva_logs ORDER BY date DESC, id DESC LIMIT 30").fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/seva", methods=["POST"])
+def seva_add():
+    data = request.get_json()
+    description = (data.get("description") or "").strip()
+    if not description:
+        return jsonify({"error": "description required"}), 400
+    conn = get_connection()
+    conn.execute(
+        "INSERT INTO seva_logs (description) VALUES (?)", (description,)
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+
+@app.route("/api/seva/<int:seva_id>", methods=["DELETE"])
+def seva_delete(seva_id):
+    conn = get_connection()
+    conn.execute("DELETE FROM seva_logs WHERE id=?", (seva_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
+
+# ── DIVINE API ────────────────────────────────────────────────────────────────
+
+@app.route("/api/divine/today")
+def divine_today_get():
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT * FROM divine_logs WHERE date=?", (date.today().isoformat(),)
+    ).fetchone()
+    conn.close()
+    return jsonify(dict(row) if row else {})
+
+
+@app.route("/api/divine", methods=["POST"])
+def divine_save():
+    data = request.get_json()
+    today = date.today().isoformat()
+    conn = get_connection()
+    conn.execute(
+        "INSERT INTO divine_logs (date, attachment, social, peace, reflection) VALUES (?,?,?,?,?) "
+        "ON CONFLICT(date) DO UPDATE SET attachment=excluded.attachment, social=excluded.social, "
+        "peace=excluded.peace, reflection=excluded.reflection",
+        (today, data.get("attachment", ""), data.get("social", ""), data.get("peace", ""), data.get("reflection", ""))
+    )
+    conn.commit()
+    conn.close()
     return jsonify({"success": True})
 
 

@@ -107,3 +107,69 @@ CREATE TABLE IF NOT EXISTS timetable_logs (
     completed INTEGER DEFAULT 0,
     UNIQUE(entry_id, date)
 );
+
+CREATE TABLE IF NOT EXISTS milestones (
+    id          BIGSERIAL PRIMARY KEY,
+    title       TEXT NOT NULL,
+    target_date TEXT NOT NULL DEFAULT '',
+    progress    INTEGER NOT NULL DEFAULT 0,
+    color       TEXT NOT NULL DEFAULT 'var(--blue)',
+    sort_order  INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS tasks (
+    id         BIGSERIAL PRIMARY KEY,
+    text       TEXT NOT NULL,
+    category   TEXT DEFAULT 'work',
+    deadline   TEXT DEFAULT '',
+    priority   TEXT DEFAULT 'mid',
+    done       INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_DATE,
+    sort_order INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS goals (
+    id         BIGSERIAL PRIMARY KEY,
+    text       TEXT NOT NULL,
+    type       TEXT DEFAULT '6month',
+    target     TEXT DEFAULT '',
+    progress   INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_DATE
+);
+
+CREATE TABLE IF NOT EXISTS transactions (
+    id     BIGSERIAL PRIMARY KEY,
+    desc   TEXT NOT NULL,
+    amount DOUBLE PRECISION NOT NULL,
+    type   TEXT DEFAULT 'expense',
+    date   TEXT DEFAULT CURRENT_DATE
+);
+
+CREATE TABLE IF NOT EXISTS water_logs (
+    id   BIGSERIAL PRIMARY KEY,
+    date TEXT NOT NULL UNIQUE,
+    cups INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS meal_logs (
+    id        BIGSERIAL PRIMARY KEY,
+    date      TEXT NOT NULL UNIQUE,
+    breakfast TEXT DEFAULT '',
+    lunch     TEXT DEFAULT '',
+    dinner    TEXT DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS seva_logs (
+    id          BIGSERIAL PRIMARY KEY,
+    date        TEXT DEFAULT CURRENT_DATE,
+    description TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS divine_logs (
+    id         BIGSERIAL PRIMARY KEY,
+    date       TEXT NOT NULL UNIQUE,
+    attachment TEXT DEFAULT '',
+    social     TEXT DEFAULT '',
+    peace      TEXT DEFAULT '',
+    reflection TEXT DEFAULT ''
+);

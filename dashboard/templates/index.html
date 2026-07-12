@@ -222,6 +222,24 @@
     .section-header { margin-bottom: 22px; }
     .section-title { font-size: 22px; font-weight: 800; margin-bottom: 3px; letter-spacing: -0.3px; }
     .section-sub { font-size: 11px; color: var(--muted); letter-spacing: 0.5px; }
+
+    /* ── Mobile ── */
+    .hamburger { display: none; background: none; border: 1px solid var(--border); border-radius: 6px; color: var(--muted); padding: 6px 9px; cursor: pointer; font-size: 16px; line-height: 1; }
+    .hamburger:hover { color: var(--text); border-color: var(--border2); }
+    .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 99; }
+    @media (max-width: 768px) {
+      .hamburger { display: flex; align-items: center; }
+      .sidebar { transform: translateX(-100%); transition: transform 0.25s ease; position: fixed; z-index: 200; }
+      .sidebar.open { transform: translateX(0); box-shadow: 4px 0 24px rgba(0,0,0,0.6); }
+      .sidebar-overlay.show { display: block; }
+      .main { margin-left: 0; }
+      .content { padding: 16px; }
+      .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr !important; }
+      .topbar { padding: 10px 16px; }
+      .form-row { flex-direction: column; }
+      .form-row .form-group { max-width: 100% !important; width: 100% !important; min-width: 0 !important; }
+      .form-row button { width: 100%; }
+    }
   </style>
 </head>
 
@@ -269,7 +287,10 @@
 <!-- ── MAIN ─────────────────────────────────────────────────── -->
 <div class="main">
   <div class="topbar">
-    <div class="topbar-title" id="topbar-title">Dashboard</div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <button class="hamburger" onclick="toggleSidebar()" aria-label="Menu"><i class="ti ti-menu-2"></i></button>
+      <div class="topbar-title" id="topbar-title">Dashboard</div>
+    </div>
     <div class="topbar-right">
       <span id="last-refresh" style="font-size:10px;color:var(--muted)"></span>
       <button class="btn-ghost" onclick="loadData()"><i class="ti ti-refresh"></i> Refresh</button>
@@ -371,6 +392,22 @@
           <span id="habit-done-label" style="font-size:11px;color:var(--muted);"></span>
         </div>
         <div id="habits-list"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="ti ti-plus"></i> Add New Habit</div>
+        <div class="form-row">
+          <div class="form-group"><input type="text" id="habit-input" placeholder="Habit name..." onkeydown="if(event.key==='Enter')addHabit()"></div>
+          <div class="form-group" style="max-width:130px;">
+            <select id="habit-category-select">
+              <option value="health">Health</option>
+              <option value="spiritual">Spiritual</option>
+              <option value="work">Work</option>
+              <option value="general">General</option>
+            </select>
+          </div>
+          <button class="btn" onclick="addHabit()" style="align-self:flex-end;">Add</button>
+        </div>
       </div>
 
       <div class="card">
@@ -600,12 +637,12 @@
         <div class="card" style="margin-bottom:0">
           <div class="card-title"><i class="ti ti-mood-happy"></i> Mood Check-in</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;" id="mood-selector">
-            <button class="mood-btn-text" onclick="setMoodText('Fired up', 5)">Fired up</button>
-            <button class="mood-btn-text" onclick="setMoodText('Good', 4)">Good</button>
-            <button class="mood-btn-text" onclick="setMoodText('Okay', 3)">Okay</button>
-            <button class="mood-btn-text" onclick="setMoodText('Low', 2)">Low</button>
-            <button class="mood-btn-text" onclick="setMoodText('Struggling', 1)">Struggling</button>
-            <button class="mood-btn-text" onclick="setMoodText('Peaceful', 4)">Peaceful</button>
+            <button class="mood-btn-text" onclick="setMoodText(this,'Fired up',5)">Fired up</button>
+            <button class="mood-btn-text" onclick="setMoodText(this,'Good',4)">Good</button>
+            <button class="mood-btn-text" onclick="setMoodText(this,'Okay',3)">Okay</button>
+            <button class="mood-btn-text" onclick="setMoodText(this,'Low',2)">Low</button>
+            <button class="mood-btn-text" onclick="setMoodText(this,'Struggling',1)">Struggling</button>
+            <button class="mood-btn-text" onclick="setMoodText(this,'Peaceful',4)">Peaceful</button>
           </div>
           <div style="font-size:11px;color:var(--muted);">Today: <span id="health-mood-display" style="color:var(--orange);">Not set</span></div>
         </div>
@@ -949,6 +986,7 @@
 </div><!-- /main -->
 </div><!-- /app -->
 
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
 <div id="toast"></div>
 
 <script>
@@ -958,16 +996,18 @@ let allHabits = [];
 let activeFilter = 'all';
 let focusChart, weightChart;
 
+// API-backed state
+let tasksData = [];
+let goalsData = [];
+let transactionsData = [];
+let waterCups = 0;
+let sevaData = [];
+
 Chart.defaults.color = '#6b7280';
 Chart.defaults.borderColor = '#1e1e1e';
 
-// ─── LOCAL STATE ──────────────────────────────────────────────────────────────
-let ls = {
-  tasks: [], goals: [], transactions: [], baliSaved: 0,
-  waterCount: 0, mood: '', journalEntries: [], sevaLog: [],
-  customBlocks: [], currentMode: 'exam', systems: [],
-  meals: {}, sleepTime: '', wakeTime: ''
-};
+// ─── LOCAL STATE (UI-only) ────────────────────────────────────────────────────
+let ls = { mood: '', systems: [], sleepTime: '', wakeTime: '' };
 try { const s = localStorage.getItem('nakul_os'); if (s) ls = { ...ls, ...JSON.parse(s) }; } catch(e) {}
 function save() { try { localStorage.setItem('nakul_os', JSON.stringify(ls)); } catch(e) {} }
 
@@ -985,17 +1025,30 @@ function showSection(id) {
   document.getElementById('section-' + id).classList.add('active');
   document.querySelector(`[onclick="showSection('${id}')"]`).classList.add('active');
   document.getElementById('topbar-title').textContent = sectionTitles[id] || id;
-  if (id === 'dashboard') updateDashboardLS();
+  // Close sidebar on mobile after navigation
+  document.querySelector('.sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('show');
+  if (id === 'dashboard') updateDashboardPreview();
   if (id === 'timetable') loadTimetable();
   if (id === 'timer') loadTimerSessions();
   if (id === 'history') initHistory();
   if (id === 'vision') loadMilestones();
+  if (id === 'tasks') loadTasks();
+  if (id === 'goals') loadGoals();
+  if (id === 'money') loadTransactions();
+  if (id === 'health') { loadWater(); loadMeals(); }
+  if (id === 'divine') { loadSeva(); loadDivine(); }
   if (id === 'journal') {
     const now = new Date();
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     document.getElementById('journal-date').textContent = `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
     loadJournal();
   }
+}
+
+function toggleSidebar() {
+  document.querySelector('.sidebar').classList.toggle('open');
+  document.getElementById('sidebar-overlay').classList.toggle('show');
 }
 
 // ─── CLOCK ────────────────────────────────────────────────────────────────────
@@ -1101,7 +1154,7 @@ function renderFromAPI(d) {
   }
   document.getElementById('week-summary').textContent = `${d.work.week_hours}h · Rs.${Math.round(d.work.week_income).toLocaleString('en-IN')}`;
 
-  updateDashboardLS();
+  updateDashboardPreview();
 }
 
 // ─── CHARTS ───────────────────────────────────────────────────────────────────
@@ -1177,17 +1230,31 @@ async function removeHabit(id) {
   showToast('Habit removed');
 }
 
-// ─── DASHBOARD LS OVERLAY ─────────────────────────────────────────────────────
-function updateDashboardLS() {
+async function addHabit() {
+  const name = (document.getElementById('habit-input') || {}).value?.trim();
+  if (!name) { showToast('Enter habit name'); return; }
+  const category = (document.getElementById('habit-category-select') || {}).value || 'general';
+  try {
+    await fetch('/api/habits', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name, category}) });
+    document.getElementById('habit-input').value = '';
+    showToast('Habit added: ' + name);
+    loadData();
+  } catch(e) { showToast('Error adding habit'); }
+}
+
+// ─── DASHBOARD PREVIEW (API-backed) ───────────────────────────────────────────
+function updateDashboardPreview() {
   // Top tasks preview
-  const top = ls.tasks.filter(t => !t.done).slice(0,3);
-  document.getElementById('dash-tasks-preview').innerHTML = top.length
+  const top = tasksData.filter(t => !t.done).slice(0,3);
+  const tasksEl = document.getElementById('dash-tasks-preview');
+  if (tasksEl) tasksEl.innerHTML = top.length
     ? top.map(t => `<div class="check-item" style="cursor:default;"><div class="check-box"></div><div class="check-text">${t.text}</div></div>`).join('')
     : '<div class="empty" style="padding:12px;">No pending tasks.</div>';
 
   // Goals preview
-  const gPrev = ls.goals.slice(0,3);
-  document.getElementById('dash-goals-preview').innerHTML = gPrev.length
+  const gPrev = goalsData.slice(0,3);
+  const goalsEl = document.getElementById('dash-goals-preview');
+  if (goalsEl) goalsEl.innerHTML = gPrev.length
     ? gPrev.map(g => `<div style="padding:7px 0;border-bottom:1px solid var(--border);">
         <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px;"><span>${g.text.slice(0,32)}${g.text.length>32?'…':''}</span><span style="color:var(--muted)">${g.progress}%</span></div>
         <div class="progress-track"><div class="progress-fill" style="width:${g.progress}%;background:var(--gold)"></div></div>
@@ -1197,7 +1264,8 @@ function updateDashboardLS() {
   // Habits quick preview (first 6 from API data)
   if (allHabits.length) {
     const first6 = allHabits.slice(0,6);
-    document.getElementById('dash-habits-preview').innerHTML = first6.map(h =>
+    const habEl = document.getElementById('dash-habits-preview');
+    if (habEl) habEl.innerHTML = first6.map(h =>
       `<div class="habit-item ${h.completed?'done':''}" onclick="toggleHabit(${h.id})" id="dash-habit-${h.id}">
         <div class="chk">${h.completed ? `<svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#000" stroke-width="2" stroke-linecap="round"/></svg>` : ''}</div>
         <span class="habit-name" style="font-size:12px;">${h.name}</span>
@@ -1207,16 +1275,18 @@ function updateDashboardLS() {
 }
 
 // ─── MOOD ─────────────────────────────────────────────────────────────────────
-async function setMoodText(label, score) {
+async function setMoodText(el, label, score) {
   document.querySelectorAll('.mood-btn-text').forEach(b => b.classList.remove('selected'));
-  event.target.classList.add('selected');
+  el.classList.add('selected');
   document.getElementById('health-mood-display').textContent = label;
   ls.mood = label; save();
-  const res = await fetch('/api/mood', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({score}) });
-  const data = await res.json();
-  document.getElementById('stat-mood').textContent = score + '/5';
-  document.getElementById('stat-mood-label').textContent = data.label;
-  showToast('Mood logged: ' + label);
+  try {
+    const res = await fetch('/api/mood', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({score}) });
+    const data = await res.json();
+    document.getElementById('stat-mood').textContent = score + '/5';
+    document.getElementById('stat-mood-label').textContent = data.label;
+    showToast('Mood logged: ' + label);
+  } catch(e) { showToast('Error logging mood'); }
 }
 
 // ─── WEIGHT ───────────────────────────────────────────────────────────────────
@@ -1263,32 +1333,63 @@ async function logWork() {
   loadData();
 }
 
-// ─── WATER ────────────────────────────────────────────────────────────────────
+// ─── WATER (API-backed) ───────────────────────────────────────────────────────
+async function loadWater() {
+  try {
+    const res = await fetch('/api/water/today');
+    const data = await res.json();
+    waterCups = data.cups || 0;
+    renderWater();
+  } catch(e) { renderWater(); }
+}
+
+async function saveWaterAPI(cups) {
+  try {
+    await fetch('/api/water/today', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({cups}) });
+  } catch(e) {}
+}
+
 function renderWater() {
   const el = document.getElementById('water-tracker');
+  if (!el) return;
   el.innerHTML = '';
   for (let i = 0; i < 8; i++) {
     const g = document.createElement('div');
-    g.className = 'glass' + (i < ls.waterCount ? ' filled' : '');
+    g.className = 'glass' + (i < waterCups ? ' filled' : '');
     g.innerHTML = '<i class="ti ti-droplet" style="font-size:13px;"></i>';
-    g.onclick = () => { ls.waterCount = i < ls.waterCount ? i : i + 1; save(); renderWater(); };
+    g.onclick = () => { waterCups = i < waterCups ? i : i + 1; saveWaterAPI(waterCups); renderWater(); };
     el.appendChild(g);
   }
-  document.getElementById('water-progress-bar').style.width = (ls.waterCount / 8 * 100) + '%';
-  document.getElementById('water-count').textContent = ls.waterCount;
+  const pb = document.getElementById('water-progress-bar');
+  const wc = document.getElementById('water-count');
+  if (pb) pb.style.width = (waterCups / 8 * 100) + '%';
+  if (wc) wc.textContent = waterCups;
 }
 
-// ─── MEALS ────────────────────────────────────────────────────────────────────
-function saveMeals() {
-  ls.meals = {
-    breakfast: document.getElementById('meal-breakfast').value,
-    lunch: document.getElementById('meal-lunch').value,
-    dinner: document.getElementById('meal-dinner').value
-  };
-  save();
-  const el = document.getElementById('meal-saved');
-  el.style.display = 'inline';
-  setTimeout(() => el.style.display = 'none', 2000);
+// ─── MEALS (API-backed) ───────────────────────────────────────────────────────
+async function loadMeals() {
+  try {
+    const res = await fetch('/api/meals/today');
+    const data = await res.json();
+    const bf = document.getElementById('meal-breakfast');
+    const ln = document.getElementById('meal-lunch');
+    const dn = document.getElementById('meal-dinner');
+    if (bf) bf.value = data.breakfast || '';
+    if (ln) ln.value = data.lunch || '';
+    if (dn) dn.value = data.dinner || '';
+  } catch(e) {}
+}
+
+async function saveMeals() {
+  const breakfast = document.getElementById('meal-breakfast').value;
+  const lunch = document.getElementById('meal-lunch').value;
+  const dinner = document.getElementById('meal-dinner').value;
+  try {
+    await fetch('/api/meals/today', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({breakfast, lunch, dinner}) });
+    const el = document.getElementById('meal-saved');
+    if (el) { el.style.display = 'inline'; setTimeout(() => el.style.display = 'none', 2000); }
+    showToast('Meals saved.');
+  } catch(e) { showToast('Error saving meals'); }
 }
 
 // ─── SLEEP ────────────────────────────────────────────────────────────────────
@@ -1317,27 +1418,68 @@ function toggleCheck(el) {
   if (text) text.classList.toggle('done-text', done);
 }
 
-// ─── SEVA ─────────────────────────────────────────────────────────────────────
-function addSeva() {
+// ─── SEVA (API-backed) ────────────────────────────────────────────────────────
+async function loadSeva() {
+  try {
+    const res = await fetch('/api/seva');
+    sevaData = await res.json();
+    renderSeva();
+  } catch(e) { renderSeva(); }
+}
+
+async function addSeva() {
   const text = document.getElementById('seva-input').value.trim();
   if (!text) return;
-  ls.sevaLog.unshift({ text, date: new Date().toLocaleDateString('en-IN') });
-  document.getElementById('seva-input').value = '';
-  save(); renderSeva();
+  try {
+    await fetch('/api/seva', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({description: text}) });
+    document.getElementById('seva-input').value = '';
+    await loadSeva();
+    showToast('Seva logged');
+  } catch(e) { showToast('Error logging seva'); }
+}
+
+async function deleteSeva(id) {
+  try {
+    await fetch('/api/seva/' + id, { method:'DELETE' });
+    sevaData = sevaData.filter(s => s.id !== id);
+    renderSeva();
+  } catch(e) { showToast('Error deleting'); }
 }
 
 function renderSeva() {
-  document.getElementById('seva-log').innerHTML = ls.sevaLog.slice(0,5).map(s =>
-    `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:11px;"><span style="color:var(--muted);font-size:9px;">${s.date}</span><br>${s.text}</div>`
+  const el = document.getElementById('seva-log');
+  if (!el) return;
+  el.innerHTML = sevaData.slice(0,5).map(s =>
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--border);font-size:11px;">' +
+    '<div><span style="color:var(--muted);font-size:9px;">' + s.date + '</span><br>' + s.description + '</div>' +
+    '<button onclick="deleteSeva(' + s.id + ')" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:15px;flex-shrink:0;">&times;</button>' +
+    '</div>'
   ).join('') || '<div class="empty" style="padding:10px;">Log your seva above.</div>';
 }
 
-// ─── DIVINE CHECK ─────────────────────────────────────────────────────────────
-function saveDivineCheck() {
-  const btn = event.target;
-  btn.textContent = 'Saved.';
-  btn.style.background = 'var(--green)';
-  setTimeout(() => { btn.textContent = 'Save Check-in'; btn.style.background = ''; }, 2000);
+// ─── DIVINE CHECK (API-backed) ────────────────────────────────────────────────
+async function loadDivine() {
+  try {
+    const res = await fetch('/api/divine/today');
+    const data = await res.json();
+    if (data.attachment) { const el = document.getElementById('attachment-check'); if (el) el.value = data.attachment; }
+    if (data.social)     { const el = document.getElementById('social-check');     if (el) el.value = data.social; }
+    if (data.peace)      { const el = document.getElementById('peace-check');      if (el) el.value = data.peace; }
+    if (data.reflection) { const el = document.getElementById('divine-reflection'); if (el) el.value = data.reflection; }
+  } catch(e) {}
+}
+
+async function saveDivineCheck() {
+  const data = {
+    attachment: (document.getElementById('attachment-check') || {}).value || '',
+    social:     (document.getElementById('social-check')     || {}).value || '',
+    peace:      (document.getElementById('peace-check')      || {}).value || '',
+    reflection: (document.getElementById('divine-reflection') || {}).value || '',
+  };
+  try {
+    await fetch('/api/divine', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(data) });
+    showToast('Check-in saved.');
+  } catch(e) { showToast('Error saving check-in'); }
 }
 
 // ─── GITA QUOTES ──────────────────────────────────────────────────────────────
@@ -1789,39 +1931,65 @@ function timerReset() {
   updateTimerDisplay();
 }
 
-// ─── TASKS ────────────────────────────────────────────────────────────────────
+// ─── TASKS (API-backed) ───────────────────────────────────────────────────────
 const priorityColors = { high: 'var(--red)', mid: 'var(--gold)', low: 'var(--green)' };
 
-function addTask() {
+async function loadTasks() {
+  try {
+    const res = await fetch('/api/tasks');
+    tasksData = await res.json();
+    renderTasks();
+    updateDashboardPreview();
+  } catch(e) { showToast('Could not load tasks'); }
+}
+
+async function addTask() {
   const text = document.getElementById('task-input').value.trim();
   if (!text) return;
-  ls.tasks.push({
-    id: Date.now(), text,
-    category: document.getElementById('task-category').value,
-    deadline: document.getElementById('task-deadline').value,
-    priority: document.getElementById('task-priority').value,
-    done: false
-  });
-  document.getElementById('task-input').value = '';
-  save(); renderTasks(); updateDashboardLS();
+  try {
+    await fetch('/api/tasks', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        text,
+        category: document.getElementById('task-category').value,
+        deadline: document.getElementById('task-deadline').value,
+        priority: document.getElementById('task-priority').value,
+      })
+    });
+    document.getElementById('task-input').value = '';
+    await loadTasks();
+  } catch(e) { showToast('Error adding task'); }
 }
 
-function toggleTask(id) {
-  const t = ls.tasks.find(t => t.id === id);
-  if (t) { t.done = !t.done; save(); renderTasks(); updateDashboardLS(); }
+async function toggleTask(id) {
+  const t = tasksData.find(t => t.id === id);
+  if (!t) return;
+  const newDone = t.done ? 0 : 1;
+  t.done = newDone;
+  renderTasks();
+  try {
+    await fetch('/api/tasks/' + id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({done: newDone}) });
+  } catch(e) { t.done = 1 - newDone; renderTasks(); }
 }
 
-function deleteTask(id) {
-  ls.tasks = ls.tasks.filter(t => t.id !== id);
-  save(); renderTasks(); updateDashboardLS();
+async function deleteTask(id) {
+  try {
+    await fetch('/api/tasks/' + id, { method:'DELETE' });
+    tasksData = tasksData.filter(t => t.id !== id);
+    renderTasks();
+    updateDashboardPreview();
+  } catch(e) { showToast('Error deleting task'); }
 }
 
 function renderTasks() {
   const catClass = { work:'tag-work', study:'tag-study', health:'tag-health', personal:'tag-personal', seva:'tag-seva' };
-  const active = ls.tasks.filter(t => !t.done);
-  const done = ls.tasks.filter(t => t.done);
-  document.getElementById('active-count').textContent = active.length;
-  document.getElementById('active-tasks-list').innerHTML = active.length ? active.map(t => `
+  const active = tasksData.filter(t => !t.done);
+  const done = tasksData.filter(t => t.done);
+  const cntEl = document.getElementById('active-count');
+  if (cntEl) cntEl.textContent = active.length;
+  const activeEl = document.getElementById('active-tasks-list');
+  if (activeEl) activeEl.innerHTML = active.length ? active.map(t => `
     <div class="check-item">
       <div class="check-box" onclick="toggleTask(${t.id})" style="cursor:pointer;border-color:${priorityColors[t.priority]||'var(--border2)'}"></div>
       <div style="flex:1;">
@@ -1835,7 +2003,8 @@ function renderTasks() {
     </div>
   `).join('') : '<div class="empty">All clear. Add a task above.</div>';
 
-  document.getElementById('done-tasks-list').innerHTML = done.length ? done.map(t => `
+  const doneEl = document.getElementById('done-tasks-list');
+  if (doneEl) doneEl.innerHTML = done.length ? done.map(t => `
     <div class="check-item">
       <div class="check-box done" onclick="toggleTask(${t.id})" style="cursor:pointer;"><i class="ti ti-check" style="font-size:9px;"></i></div>
       <div class="check-text done-text" style="flex:1;">${t.text}</div>
@@ -1844,30 +2013,54 @@ function renderTasks() {
   `).join('') : '<div class="empty">Complete tasks to see them here.</div>';
 }
 
-// ─── GOALS ────────────────────────────────────────────────────────────────────
-function addGoal() {
+// ─── GOALS (API-backed) ───────────────────────────────────────────────────────
+async function loadGoals() {
+  try {
+    const res = await fetch('/api/goals');
+    goalsData = await res.json();
+    renderGoals();
+    updateDashboardPreview();
+  } catch(e) { showToast('Could not load goals'); }
+}
+
+async function addGoal() {
   const text = document.getElementById('goal-input').value.trim();
   if (!text) return;
-  ls.goals.push({ id: Date.now(), text, type: document.getElementById('goal-type').value, target: document.getElementById('goal-target').value, progress: 0 });
-  document.getElementById('goal-input').value = '';
-  document.getElementById('goal-target').value = '';
-  save(); renderGoals(); updateDashboardLS();
+  try {
+    await fetch('/api/goals', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ text, type: document.getElementById('goal-type').value, target: document.getElementById('goal-target').value })
+    });
+    document.getElementById('goal-input').value = '';
+    document.getElementById('goal-target').value = '';
+    await loadGoals();
+  } catch(e) { showToast('Error adding goal'); }
 }
 
-function updateGoalProgress(id, val) {
-  const g = ls.goals.find(g => g.id === id);
-  if (g) { g.progress = parseInt(val); save(); document.getElementById('gp-' + id).textContent = val + '% complete'; }
+async function updateGoalProgress(id, val) {
+  const g = goalsData.find(g => g.id === id);
+  if (g) { g.progress = parseInt(val); const lbl = document.getElementById('gp-' + id); if (lbl) lbl.textContent = val + '% complete'; }
+  try {
+    await fetch('/api/goals/' + id, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({progress: parseInt(val)}) });
+  } catch(e) {}
 }
 
-function deleteGoal(id) {
-  ls.goals = ls.goals.filter(g => g.id !== id);
-  save(); renderGoals(); updateDashboardLS();
+async function deleteGoal(id) {
+  try {
+    await fetch('/api/goals/' + id, { method:'DELETE' });
+    goalsData = goalsData.filter(g => g.id !== id);
+    renderGoals();
+    updateDashboardPreview();
+  } catch(e) { showToast('Error deleting goal'); }
 }
 
 function renderGoals() {
   ['6month','1year','life'].forEach(type => {
-    const goals = ls.goals.filter(g => g.type === type);
-    document.getElementById('goals-' + type).innerHTML = goals.length ? goals.map(g => `
+    const el = document.getElementById('goals-' + type);
+    if (!el) return;
+    const goals = goalsData.filter(g => g.type === type);
+    el.innerHTML = goals.length ? goals.map(g => `
       <div class="goal-item">
         <div class="goal-header">
           <div class="goal-name">${g.text}</div>
@@ -1884,31 +2077,53 @@ function renderGoals() {
   });
 }
 
-// ─── MONEY (localStorage) ─────────────────────────────────────────────────────
-function addTransaction() {
+// ─── MONEY / TRANSACTIONS (API-backed) ───────────────────────────────────────
+async function loadTransactions() {
+  try {
+    const res = await fetch('/api/transactions');
+    transactionsData = await res.json();
+    renderMoney();
+  } catch(e) { showToast('Could not load transactions'); }
+}
+
+async function addTransaction() {
   const desc = document.getElementById('tx-desc').value.trim();
   const amount = parseFloat(document.getElementById('tx-amount').value);
   const type = document.getElementById('tx-type').value;
   if (!desc || !amount) { showToast('Enter description and amount'); return; }
-  ls.transactions.unshift({ id: Date.now(), desc, amount, type, date: new Date().toLocaleDateString('en-IN') });
-  document.getElementById('tx-desc').value = '';
-  document.getElementById('tx-amount').value = '';
-  save(); renderMoney();
+  try {
+    await fetch('/api/transactions', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({desc, amount, type})
+    });
+    document.getElementById('tx-desc').value = '';
+    document.getElementById('tx-amount').value = '';
+    await loadTransactions();
+    showToast('Transaction added');
+  } catch(e) { showToast('Error adding transaction'); }
 }
 
-function deleteTransaction(id) {
-  ls.transactions = ls.transactions.filter(t => t.id !== id);
-  save(); renderMoney();
+async function deleteTransaction(id) {
+  try {
+    await fetch('/api/transactions/' + id, { method:'DELETE' });
+    transactionsData = transactionsData.filter(t => t.id !== id);
+    renderMoney();
+  } catch(e) { showToast('Error deleting'); }
 }
 
 function renderMoney() {
-  const income  = ls.transactions.filter(t => t.type === 'income').reduce((s,t) => s + t.amount, 0);
-  const expense = ls.transactions.filter(t => t.type === 'expense').reduce((s,t) => s + t.amount, 0);
-  document.getElementById('total-income').textContent  = income.toLocaleString('en-IN');
-  document.getElementById('total-expense').textContent = expense.toLocaleString('en-IN');
-  document.getElementById('total-savings').textContent = (income - expense).toLocaleString('en-IN');
-  document.getElementById('transactions-list').innerHTML = ls.transactions.length
-    ? ls.transactions.map(t => `
+  const income  = transactionsData.filter(t => t.type === 'income').reduce((s,t) => s + t.amount, 0);
+  const expense = transactionsData.filter(t => t.type === 'expense').reduce((s,t) => s + t.amount, 0);
+  const iEl = document.getElementById('total-income');
+  const eEl = document.getElementById('total-expense');
+  const sEl = document.getElementById('total-savings');
+  if (iEl) iEl.textContent = income.toLocaleString('en-IN');
+  if (eEl) eEl.textContent = expense.toLocaleString('en-IN');
+  if (sEl) sEl.textContent = (income - expense).toLocaleString('en-IN');
+  const listEl = document.getElementById('transactions-list');
+  if (listEl) listEl.innerHTML = transactionsData.length
+    ? transactionsData.map(t => `
         <div class="tx-row">
           <div style="flex:1;"><div style="font-size:11px;">${t.desc}</div><div style="font-size:9px;color:var(--muted);">${t.date}</div></div>
           <span class="tx-type tx-${t.type}">${t.type}</span>
@@ -2092,18 +2307,18 @@ function copyForClaude() {
     out += `[NOTE] Dashboard data not loaded. Refresh and try again.\n`;
   }
 
-  if (ls.tasks.length > 0) {
-    const pending = ls.tasks.filter(t => !t.done);
-    const done = ls.tasks.filter(t => t.done);
+  if (tasksData.length > 0) {
+    const pending = tasksData.filter(t => !t.done);
+    const done = tasksData.filter(t => t.done);
     out += `\n[TASKS] ${done.length} done, ${pending.length} pending\n`;
     for (const t of pending.slice(0,5)) {
-      out += `- [${t.priority.toUpperCase()}] ${t.text}${t.deadline ? ' | due: ' + t.deadline : ''}\n`;
+      out += `- [${(t.priority||'mid').toUpperCase()}] ${t.text}${t.deadline ? ' | due: ' + t.deadline : ''}\n`;
     }
   }
 
-  if (ls.goals.length > 0) {
+  if (goalsData.length > 0) {
     out += `\n[GOALS]\n`;
-    for (const g of ls.goals.slice(0,4)) {
+    for (const g of goalsData.slice(0,4)) {
       out += `- [${g.type}] ${g.text} — ${g.progress}%${g.target ? ' | target: ' + g.target : ''}\n`;
     }
   }
@@ -2428,29 +2643,25 @@ async function deleteMilestone(id) {
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 setDailyQuote();
-// timetable loaded on tab switch
-renderTasks();
-renderGoals();
-renderMoney();
-renderSeva();
-renderWater();
 renderSystems();
-updateDashboardLS();
+renderWater();
 updateTimerDisplay();
 loadTimerSessions();
 loadData();
+loadMilestones();
+loadTasks();
+loadGoals();
 setInterval(loadData, 60000);
 
-// Restore health section state
+// Restore UI-only state
 if (ls.mood) {
-  const moodMap = { 'Fired up': 5, 'Good': 4, 'Peaceful': 4, 'Okay': 3, 'Low': 2, 'Struggling': 1 };
-  document.getElementById('health-mood-display').textContent = ls.mood;
+  const moodEl = document.getElementById('health-mood-display');
+  if (moodEl) moodEl.textContent = ls.mood;
 }
-if (ls.meals) {
-  if (ls.meals.breakfast) document.getElementById('meal-breakfast').value = ls.meals.breakfast;
-  if (ls.meals.lunch) document.getElementById('meal-lunch').value = ls.meals.lunch;
-  if (ls.meals.dinner) document.getElementById('meal-dinner').value = ls.meals.dinner;
-}
+if (ls.sleepTime) { const el = document.getElementById('sleep-time'); if (el) el.value = ls.sleepTime; }
+if (ls.wakeTime)  { const el = document.getElementById('wake-time');  if (el) el.value = ls.wakeTime; }
+document.getElementById('sleep-time').addEventListener('change', function(){ ls.sleepTime = this.value; save(); });
+document.getElementById('wake-time').addEventListener('change',  function(){ ls.wakeTime  = this.value; save(); });
 </script>
 </body>
 </html>

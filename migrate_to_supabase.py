@@ -9,8 +9,13 @@ import psycopg2
 import psycopg2.extras
 from urllib.parse import urlparse, unquote
 
+import os
+
 SQLITE_PATH = r"D:\Nakul.exe\nakul-focus\nakul_focus.db"
-PG_URL = "postgresql://postgres.ygdjgauciciswplwnnbh:Basuri%40321123@aws-1-ap-south-1.pooler.supabase.com:6543/postgres"
+# Set PG_URL as an environment variable — never hardcode credentials here
+PG_URL = os.environ.get("PG_URL") or os.environ.get("DATABASE_URL")
+if not PG_URL:
+    raise SystemExit("Set PG_URL or DATABASE_URL environment variable before running.")
 
 # Tables in dependency order
 TABLES = [
@@ -25,6 +30,15 @@ TABLES = [
     "bali_fund",
     "timetable_entries",
     "timetable_logs",
+    "milestones",
+    "journal_entries",
+    "tasks",
+    "goals",
+    "transactions",
+    "water_logs",
+    "meal_logs",
+    "seva_logs",
+    "divine_logs",
 ]
 
 
