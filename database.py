@@ -111,13 +111,20 @@ class _PgConnection:
         import psycopg2
         import psycopg2.extras
         from urllib.parse import urlparse, unquote
-        p = urlparse(url)
+        # urlparse doesn't recognise the postgresql:// scheme — swap to https:// for parsing
+        p = urlparse(url.replace("postgresql://", "https://", 1).replace("postgres://", "https://", 1))
+        host     = p.hostname or ""
+        port     = p.port or 5432
+        dbname   = (p.path or "/postgres").lstrip("/") or "postgres"
+        user     = unquote(p.username or "")
+        password = unquote(p.password or "")
+        print(f"[DB] connecting host={host} port={port} db={dbname} user={user[:8]}…")
         self._conn = psycopg2.connect(
-            host=p.hostname,
-            port=p.port or 5432,
-            dbname=(p.path or "/postgres").lstrip("/"),
-            user=unquote(p.username or ""),
-            password=unquote(p.password or ""),
+            host=host,
+            port=port,
+            dbname=dbname,
+            user=user,
+            password=password,
             sslmode="require",
             cursor_factory=psycopg2.extras.RealDictCursor,
         )
