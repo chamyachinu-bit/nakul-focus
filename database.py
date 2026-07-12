@@ -36,11 +36,12 @@ def _fix_sql(sql: str) -> str:
     """Convert SQLite SQL dialect to PostgreSQL."""
     # Parameter placeholders
     sql = sql.replace("?", "%s")
-    # Date / time functions
-    sql = sql.replace("date('now')", "CURRENT_DATE")
-    sql = sql.replace("DATE('now')", "CURRENT_DATE")
-    sql = sql.replace("(date('now'))", "CURRENT_DATE")
+    # Date defaults in CREATE TABLE — keep as CURRENT_DATE (no cast needed)
+    sql = sql.replace("DEFAULT (date('now'))", "DEFAULT CURRENT_DATE")
+    sql = sql.replace("DEFAULT (DATE('now'))", "DEFAULT CURRENT_DATE")
     sql = sql.replace("DEFAULT (CURRENT_DATE)", "DEFAULT CURRENT_DATE")
+    # date('now') elsewhere (WHERE clauses etc.) — cast to text so TEXT = text works
+    sql = re.sub(r"date\('now'\)", "CURRENT_DATE::text", sql, flags=re.IGNORECASE)
     # strftime → PostgreSQL equivalents
     sql = re.sub(r"strftime\s*\(\s*'%Y'\s*,\s*(\w+)\s*\)",
                  r"EXTRACT(YEAR FROM \1::date)::text", sql)
@@ -78,6 +79,7 @@ class _Cursor:
         needs_returning = (
             sql.strip().upper().startswith("INSERT")
             and "RETURNING" not in sql.upper()
+            and "INTO SETTINGS" not in sql.upper()
         )
         if needs_returning:
             sql = sql.rstrip().rstrip(";") + " RETURNING id"
