@@ -16,7 +16,8 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import compat  # noqa: F401
 
-from flask import Flask, render_template, jsonify, request
+import hashlib
+from flask import Flask, render_template, jsonify, request, session, redirect, url_for
 from datetime import datetime, date, timedelta
 from database import get_connection, initialize_database, seed_defaults
 from habit_tracker import (
@@ -39,6 +40,8 @@ app.secret_key = os.environ.get("SECRET_KEY", "nakul-dev-secret-change-in-prod")
 
 _db_ready = False
 
+_PUBLIC = {"/login", "/static"}
+
 @app.before_request
 def _ensure_db():
     global _db_ready
@@ -49,8 +52,45 @@ def _ensure_db():
             _db_ready = True
         except Exception as e:
             print(f"[DB INIT ERROR] {e}")
+    # Auth gate — skip for login page and static assets
+    path = request.path
+    if any(path == p or path.startswith(p + "/") for p in _PUBLIC):
+        return
+    if not session.get("ok"):
+        return redirect(url_for("login_page"))
 
-#  PAGES 
+
+#  AUTH
+
+@app.route("/login", methods=["GET"])
+def login_page():
+    if session.get("ok"):
+        return redirect(url_for("index"))
+    error = request.args.get("error", "")
+    return render_template("login.html", error=error)
+
+
+@app.route("/login", methods=["POST"])
+def login_submit():
+    pw = request.form.get("password", "")
+    pw_hash = hashlib.sha256(pw.encode()).hexdigest()
+    conn = get_connection()
+    row = conn.execute("SELECT value FROM settings WHERE key='override_password_hash'").fetchone()
+    conn.close()
+    stored = row[0] if row else None
+    if stored and pw_hash == stored:
+        session["ok"] = True
+        return redirect(url_for("index"))
+    return redirect(url_for("login_page", error="1"))
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login_page"))
+
+
+#  PAGES
 
 @app.route("/")
 def index():
@@ -598,6 +638,122 @@ def timetable_import_api(name):
         return jsonify({"success": True, "count": count})
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/timetable/plan", methods=["POST"])
+def timetable_plan_api():
+    """Apply an AI-generated timetable for tomorrow (or today).
+    Expects JSON: { "entries": [{time_start, time_end, name, category, note}, ...], "target": "today"|"tomorrow" }
+    Deactivates all current entries then inserts the new ones.
+    """
+    data = request.get_json()
+    entries = data.get("entries")
+    if not isinstance(entries, list) or not entries:
+        return jsonify({"error": "entries array required"}), 400
+    conn = get_connection()
+    conn.execute("UPDATE timetable_entries SET active=0")
+    conn.commit()
+    inserted = 0
+    for e in entries:
+        name = (e.get("name") or "").strip()
+        time_start = (e.get("time_start") or "").strip()
+        if not name or not time_start:
+            continue
+        conn.execute(
+            "INSERT INTO timetable_entries (time_start, time_end, name, category, note, active) VALUES (?,?,?,?,?,1)",
+            (time_start, e.get("time_end") or "", name, e.get("category", "work"), e.get("note", ""))
+        )
+        inserted += 1
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True, "inserted": inserted})
+
+
+@app.route("/api/timetable/ai-prompt")
+def timetable_ai_prompt_api():
+    """Build a rich context prompt for AI timetable planning."""
+    today = date.today().isoformat()
+    tomorrow = (date.today() + timedelta(days=1)).strftime("%A, %d %B %Y")
+    conn = get_connection()
+
+    # Habits today
+    habits = conn.execute("SELECT id, name, category FROM habits WHERE active=1 ORDER BY category, name").fetchall()
+    habit_logs = {r["habit_id"]: bool(r["completed"]) for r in
+                  conn.execute("SELECT habit_id, completed FROM habit_logs WHERE date=?", (today,)).fetchall()}
+    habits_done = [h["name"] for h in habits if habit_logs.get(h["id"], False)]
+    habits_missed = [h["name"] for h in habits if not habit_logs.get(h["id"], False)]
+
+    # Mood today
+    mood_row = conn.execute(
+        "SELECT mood_score, mood_label FROM mood_logs WHERE date=? ORDER BY id DESC LIMIT 1", (today,)
+    ).fetchone()
+    mood_str = f"{mood_row['mood_score']}/5 ({mood_row['mood_label'].strip()})" if mood_row else "not logged"
+
+    # Focus today
+    focus_total = conn.execute(
+        "SELECT SUM(duration_mins) FROM focus_sessions WHERE date=? AND completed=1", (today,)
+    ).fetchone()[0] or 0
+
+    # Tasks pending
+    tasks = conn.execute("SELECT text, priority, deadline FROM tasks WHERE done=0 ORDER BY priority DESC LIMIT 10").fetchall()
+    tasks_str = "\n".join(f"  - [{r['priority'].upper()}] {r['text']}" + (f" (due {r['deadline']})" if r["deadline"] else "") for r in tasks) or "  none"
+
+    # Goals
+    goals = conn.execute("SELECT text, type FROM goals ORDER BY id DESC LIMIT 5").fetchall()
+    goals_str = "\n".join(f"  - ({r['type']}) {r['text']}" for r in goals) or "  none"
+
+    # Current timetable entries (as reference)
+    current_tt = conn.execute(
+        "SELECT time_start, time_end, name, category FROM timetable_entries WHERE active=1 ORDER BY time_start"
+    ).fetchall()
+    current_tt_str = "\n".join(
+        f"  {r['time_start']}-{r['time_end'] or '?'} [{r['category']}] {r['name']}" for r in current_tt
+    ) or "  (no active entries)"
+
+    conn.close()
+
+    prompt = f"""You are helping Nakul plan his schedule for tomorrow: {tomorrow}.
+
+== TODAY'S SNAPSHOT ==
+Mood: {mood_str}
+Deep work done: {round(focus_total / 60, 1)}h
+
+Habits done today:
+{chr(10).join('  + ' + h for h in habits_done) or '  (none yet)'}
+
+Habits missed today:
+{chr(10).join('  - ' + h for h in habits_missed) or '  (all done)'}
+
+== PENDING TASKS ==
+{tasks_str}
+
+== ACTIVE GOALS ==
+{goals_str}
+
+== CURRENT TIMETABLE (reference) ==
+{current_tt_str}
+
+== NAKUL'S ROUTINE CONTEXT ==
+- Wakes ~6 AM, morning prayer + meditation 6-7 AM
+- Deep work blocks ideally 9 AM - 1 PM and 3 PM - 6 PM
+- Workout / tennis in evening, dinner by 8 PM
+- Journal + wind-down by 10 PM, sleep by 11 PM
+- Avoid scheduling more than 3 back-to-back deep work hours
+
+== YOUR TASK ==
+Create a realistic, balanced timetable for tomorrow that:
+1. Addresses the missed habits from today
+2. Makes progress on the pending tasks (priority order)
+3. Follows Nakul's natural rhythm (morning spiritual, deep work blocks, evening health)
+4. Includes short breaks between blocks
+
+Return ONLY a valid JSON array — no explanation, no markdown, no code fences. Each object must have:
+  time_start (HH:MM 24h), time_end (HH:MM 24h), name (string), category (work|health|spiritual|personal|seva|rest), note (string, can be empty)
+
+Example format:
+[{{"time_start":"06:00","time_end":"06:30","name":"Morning Prayer","category":"spiritual","note":""}},{{"time_start":"09:00","time_end":"11:00","name":"Deep Work — Project X","category":"work","note":"Focus mode"}}]"""
+
+    return jsonify({"prompt": prompt})
 
 
 # ── MILESTONES API ─────────────────────────────────────────────────────────────

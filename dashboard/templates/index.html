@@ -302,6 +302,7 @@
       <span id="last-refresh" style="font-size:10px;color:var(--muted)"></span>
       <button class="btn-ghost" onclick="loadData()"><i class="ti ti-refresh"></i><span class="mobile-hide"> Refresh</span></button>
       <button class="btn-copy" onclick="copyForClaude()"><i class="ti ti-copy"></i><span class="mobile-hide"> Copy for Claude</span></button>
+      <a href="/logout" class="btn-ghost" style="text-decoration:none;" title="Logout"><i class="ti ti-logout"></i></a>
     </div>
   </div>
 
@@ -483,6 +484,36 @@
           <button class="btn-ghost" onclick="importTimetableTemplate('4thyear')">4th Year Mode</button>
         </div>
         <div style="font-size:10px;color:var(--muted);">Importing deactivates current entries and loads the template. Your existing entries are not deleted from the database.</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><i class="ti ti-robot"></i> PLAN TOMORROW WITH AI</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6;">
+          Step 1: Click "Copy AI Prompt" — it copies a context-rich prompt to your clipboard.<br>
+          Step 2: Paste it into Claude.ai, discuss and refine the schedule.<br>
+          Step 3: Ask Claude to give you the final JSON. Paste that JSON below and click "Apply Schedule".
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+          <button class="btn" onclick="copyTimetableAIPrompt()" id="btn-copy-ai-prompt">
+            <i class="ti ti-copy"></i> Copy AI Prompt
+          </button>
+          <button class="btn-ghost" onclick="document.getElementById('ai-json-area').value=''" style="color:var(--muted);">
+            Clear
+          </button>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Paste JSON from Claude here</label>
+          <textarea
+            id="ai-json-area"
+            rows="6"
+            placeholder='[{"time_start":"06:00","time_end":"06:30","name":"Morning Prayer","category":"spiritual","note":""},...]'
+            style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:monospace;font-size:11px;padding:10px;resize:vertical;outline:none;"
+          ></textarea>
+        </div>
+        <button class="btn" onclick="applyAITimetable()" style="background:var(--green);">
+          <i class="ti ti-check"></i> Apply Schedule
+        </button>
+        <div id="ai-plan-status" style="margin-top:10px;font-size:12px;color:var(--muted);"></div>
       </div>
     </div>
 
@@ -1736,6 +1767,66 @@ async function importTimetableTemplate(name) {
     }
   } catch(e) { showToast('Error importing template'); }
 }
+
+async function copyTimetableAIPrompt() {
+  const btn = document.getElementById('btn-copy-ai-prompt');
+  try {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader-2"></i> Fetching...';
+    const res = await fetch('/api/timetable/ai-prompt');
+    const data = await res.json();
+    await navigator.clipboard.writeText(data.prompt);
+    btn.innerHTML = '<i class="ti ti-check"></i> Copied!';
+    showToast('AI prompt copied to clipboard. Paste it into Claude.ai.');
+  } catch(e) {
+    showToast('Could not copy prompt. Try again.');
+  } finally {
+    setTimeout(function() {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ti ti-copy"></i> Copy AI Prompt';
+    }, 2500);
+  }
+}
+
+async function applyAITimetable() {
+  const raw = document.getElementById('ai-json-area').value.trim();
+  const status = document.getElementById('ai-plan-status');
+  if (!raw) { showToast('Paste the JSON from Claude first.'); return; }
+  let entries;
+  try {
+    entries = JSON.parse(raw);
+    if (!Array.isArray(entries) || !entries.length) throw new Error('not array');
+  } catch(e) {
+    status.style.color = 'var(--red)';
+    status.textContent = 'Invalid JSON. Make sure you pasted only the JSON array from Claude.';
+    return;
+  }
+  if (!confirm('Apply AI schedule? All current timetable entries will be deactivated and replaced.')) return;
+  status.style.color = 'var(--muted)';
+  status.textContent = 'Applying...';
+  try {
+    const res = await fetch('/api/timetable/plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entries: entries }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      document.getElementById('ai-json-area').value = '';
+      status.style.color = 'var(--green)';
+      status.textContent = data.inserted + ' blocks applied successfully.';
+      showToast('Schedule applied: ' + data.inserted + ' blocks loaded.');
+      await loadTimetable();
+    } else {
+      status.style.color = 'var(--red)';
+      status.textContent = data.error || 'Apply failed.';
+    }
+  } catch(e) {
+    status.style.color = 'var(--red)';
+    status.textContent = 'Error applying schedule. Check server.';
+  }
+}
+
 // ─── FOCUS TIMER ────────────────────────────────────────────────────────────
 const TIMER_MODES = {
   pomodoro: { focus: 25, brk: 5,  label: 'Pomodoro' },
