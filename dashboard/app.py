@@ -401,13 +401,13 @@ def transactions_get():
 @app.route("/api/transactions", methods=["POST"])
 def transactions_add():
     data = request.get_json()
-    desc = (data.get("desc") or "").strip()
+    desc = (data.get("desc") or data.get("description") or "").strip()
     amount = data.get("amount")
     if not desc or not amount:
         return jsonify({"error": "desc and amount required"}), 400
     conn = get_connection()
     conn.execute(
-        "INSERT INTO transactions (desc, amount, type) VALUES (?,?,?)",
+        "INSERT INTO transactions (description, amount, type) VALUES (?,?,?)",
         (desc, float(amount), data.get("type", "expense"))
     )
     conn.commit()

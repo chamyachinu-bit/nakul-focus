@@ -2223,7 +2223,7 @@ function renderMoney() {
   if (listEl) listEl.innerHTML = transactionsData.length
     ? transactionsData.map(t => `
         <div class="tx-row">
-          <div style="flex:1;"><div style="font-size:11px;">${t.desc}</div><div style="font-size:9px;color:var(--muted);">${t.date}</div></div>
+          <div style="flex:1;"><div style="font-size:11px;">${t.description || t.desc || ''}</div><div style="font-size:9px;color:var(--muted);">${t.date}</div></div>
           <span class="tx-type tx-${t.type}">${t.type}</span>
           <div style="font-size:12px;font-weight:600;color:${t.type==='income'?'var(--green)':'var(--red)'};margin:0 10px;">Rs.${t.amount.toLocaleString('en-IN')}</div>
           <button onclick="deleteTransaction(${t.id})" style="background:none;border:none;color:var(--muted2);cursor:pointer;font-size:15px;">&times;</button>

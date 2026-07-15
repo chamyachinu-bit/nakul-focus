@@ -138,11 +138,11 @@ CREATE TABLE IF NOT EXISTS goals (
 );
 
 CREATE TABLE IF NOT EXISTS transactions (
-    id     BIGSERIAL PRIMARY KEY,
-    desc   TEXT NOT NULL,
-    amount DOUBLE PRECISION NOT NULL,
-    type   TEXT DEFAULT 'expense',
-    date   TEXT DEFAULT CURRENT_DATE
+    id          BIGSERIAL PRIMARY KEY,
+    description TEXT NOT NULL,
+    amount      DOUBLE PRECISION NOT NULL,
+    type        TEXT DEFAULT 'expense',
+    date        TEXT DEFAULT CURRENT_DATE
 );
 
 CREATE TABLE IF NOT EXISTS water_logs (

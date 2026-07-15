@@ -335,11 +335,11 @@ def initialize_database():
     """)
     c.execute("""
         CREATE TABLE IF NOT EXISTS transactions (
-            id     INTEGER PRIMARY KEY AUTOINCREMENT,
-            desc   TEXT NOT NULL,
-            amount REAL NOT NULL,
-            type   TEXT DEFAULT 'expense',
-            date   TEXT DEFAULT (date('now'))
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            description TEXT NOT NULL,
+            amount      REAL NOT NULL,
+            type        TEXT DEFAULT 'expense',
+            date        TEXT DEFAULT (date('now'))
         )
     """)
     c.execute("""
